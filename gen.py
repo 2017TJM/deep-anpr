@@ -272,7 +272,7 @@ def load_fonts(folder_path):
     return fonts, font_char_ims
 
 
-def generate_ims(num_bg_images):
+def generate_ims():
     """
     Generate number plate images.
 
@@ -282,7 +282,7 @@ def generate_ims(num_bg_images):
     """
     variation = 1.0
     fonts, font_char_ims = load_fonts(FONT_DIR)
-    #num_bg_images = len(os.listdir("bgs"))
+    num_bg_images = len(os.listdir("bgs"))
     while True:
         yield generate_im(font_char_ims[random.choice(fonts)], num_bg_images)
 
@@ -291,7 +291,7 @@ if __name__ == "__main__":
     plateOutputDir = "CA_test"
     num_bg_images = len(os.listdir("bgs"))
     os.mkdir(plateOutputDir)
-    im_gen = itertools.islice(generate_ims(num_bg_images), int(sys.argv[1]))
+    im_gen = itertools.islice(generate_ims(), int(sys.argv[1]))
     numImageWithPlate = 0
     numImageNoPlate = 0
     for img_idx, (im, c, p) in enumerate(im_gen):
