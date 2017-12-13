@@ -47,7 +47,7 @@ import tensorflow as tf
 
 import common
 import model
-
+import time
 
 def make_scaled_ims(im, min_shape):
     ratio = 1. / 2 ** 0.5
@@ -182,10 +182,11 @@ if __name__ == "__main__":
     f = numpy.load(sys.argv[2])
     param_vals = [f[n] for n in sorted(f.files, key=lambda s: int(s[4:]))]
 
+    start_time = time.time()
     for pt1, pt2, present_prob, letter_probs in post_process(
                                                   detect(im_gray, param_vals)):
-        pt1 = tuple(reversed(map(int, pt1)))
-        pt2 = tuple(reversed(map(int, pt2)))
+        pt1 = tuple(reversed(list(map(int, pt1))))
+        pt2 = tuple(reversed(list(map(int, pt2))))
 
         code = letter_probs_to_code(letter_probs)
 
@@ -208,5 +209,6 @@ if __name__ == "__main__":
                     (255, 255, 255),
                     thickness=2)
 
+    print("Time for processing single image: {}".format(time.time()- start_time))
     cv2.imwrite(sys.argv[3], im)
 

@@ -117,6 +117,9 @@ def make_affine_transform(from_shape, to_shape,
     from_size = numpy.array([[from_shape[1], from_shape[0]]]).T
     to_size = numpy.array([[to_shape[1], to_shape[0]]]).T
 
+    # (0.6 + 0.875) * 0.5 - (0.875 - 0.6) * 0.5 * 1.5 ...
+    # (0.7375 - 0.20625) to (0.7375 + 0.20625)
+    # 0.53125 to 0.944
     scale = random.uniform((min_scale + max_scale) * 0.5 -
                            (max_scale - min_scale) * 0.5 * scale_variation,
                            (min_scale + max_scale) * 0.5 +
@@ -158,14 +161,14 @@ def make_affine_transform(from_shape, to_shape,
 
 
 def generate_code():
-    return "{}{}{}{} {}{}{}".format(
+    return "{}{}{}{}{}{}{}".format(
+        random.choice(common.DIGITS),
+        random.choice(common.LETTERS),
         random.choice(common.LETTERS),
         random.choice(common.LETTERS),
         random.choice(common.DIGITS),
         random.choice(common.DIGITS),
-        random.choice(common.LETTERS),
-        random.choice(common.LETTERS),
-        random.choice(common.LETTERS))
+        random.choice(common.DIGITS))
 
 
 def rounded_rect(shape, radius):
@@ -184,16 +187,19 @@ def rounded_rect(shape, radius):
 
 
 def generate_plate(font_height, char_ims):
-    h_padding = random.uniform(0.2, 0.4) * font_height
-    v_padding = random.uniform(0.1, 0.3) * font_height
-    spacing = font_height * random.uniform(-0.05, 0.05)
+    h_padding = random.uniform(0.25, 0.35) * font_height
+    v_padBot = random.uniform(0.15, 0.25) * font_height
+    v_padTop = random.uniform(0.6, 0.7) * font_height
+
+    # Note that the font already contains spacing, so it is possible to have negative spacing
+    spacing = font_height * random.uniform(-0.065, -0.06)
     radius = 1 + int(font_height * 0.1 * random.random())
 
     code = generate_code()
     text_width = sum(char_ims[c].shape[1] for c in code)
     text_width += (len(code) - 1) * spacing
 
-    out_shape = (int(font_height + v_padding * 2),
+    out_shape = (int(font_height + v_padBot + v_padTop),
                  int(text_width + h_padding * 2))
 
     text_color, plate_color = pick_colors()
@@ -201,7 +207,7 @@ def generate_plate(font_height, char_ims):
     text_mask = numpy.zeros(out_shape)
     
     x = h_padding
-    y = v_padding 
+    y = v_padTop
     for c in code:
         char_im = char_ims[c]
         ix, iy = int(x), int(y)
@@ -218,7 +224,7 @@ def generate_bg(num_bg_images):
     found = False
     while not found:
         fname = "bgs/{:08d}.jpg".format(random.randint(0, num_bg_images - 1))
-        bg = cv2.imread(fname, cv2.CV_LOAD_IMAGE_GRAYSCALE) / 255.
+        bg = cv2.imread(fname, cv2.IMREAD_GRAYSCALE) / 255.
         if (bg.shape[1] >= OUTPUT_SHAPE[1] and
             bg.shape[0] >= OUTPUT_SHAPE[0]):
             found = True
@@ -240,7 +246,7 @@ def generate_im(char_ims, num_bg_images):
                             to_shape=bg.shape,
                             min_scale=0.6,
                             max_scale=0.875,
-                            rotation_variation=1.0,
+                            rotation_variation=0.4,
                             scale_variation=1.5,
                             translation_variation=1.2)
     plate = cv2.warpAffine(plate, M, (bg.shape[1], bg.shape[0]))
@@ -266,7 +272,7 @@ def load_fonts(folder_path):
     return fonts, font_char_ims
 
 
-def generate_ims():
+def generate_ims(num_bg_images):
     """
     Generate number plate images.
 
@@ -276,17 +282,27 @@ def generate_ims():
     """
     variation = 1.0
     fonts, font_char_ims = load_fonts(FONT_DIR)
-    num_bg_images = len(os.listdir("bgs"))
+    #num_bg_images = len(os.listdir("bgs"))
     while True:
         yield generate_im(font_char_ims[random.choice(fonts)], num_bg_images)
 
 
 if __name__ == "__main__":
-    os.mkdir("test")
-    im_gen = itertools.islice(generate_ims(), int(sys.argv[1]))
+    plateOutputDir = "CA_test"
+    num_bg_images = len(os.listdir("bgs"))
+    os.mkdir(plateOutputDir)
+    im_gen = itertools.islice(generate_ims(num_bg_images), int(sys.argv[1]))
+    numImageWithPlate = 0
+    numImageNoPlate = 0
     for img_idx, (im, c, p) in enumerate(im_gen):
-        fname = "test/{:08d}_{}_{}.png".format(img_idx, c,
+        fname = "{}/{:08d}_{}_{}.png".format(plateOutputDir, img_idx, c,
                                                "1" if p else "0")
-        print fname
-        cv2.imwrite(fname, im * 255.)
-
+        print (fname)
+        if p:
+          cv2.imwrite(fname, im * 255.)
+          numImageWithPlate += 1
+        else:
+          bg = generate_bg(num_bg_images)
+          cv2.imwrite(fname, bg * 255.)
+          numImageNoPlate += 1
+    print("Images with plate: {}, images without plate: {}".format(numImageWithPlate, numImageNoPlate))
