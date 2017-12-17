@@ -38,7 +38,7 @@ import math
 import os
 import random
 import sys
-
+import re
 import cv2
 import numpy
 
@@ -106,7 +106,8 @@ def pick_colors():
         first = False
     return text_color, plate_color
 
-
+# scale_variation seems to determine percentage of images that are considered out of bounds. Assume
+# that rotation_variation and translation_variation do something similar
 def make_affine_transform(from_shape, to_shape, 
                           min_scale, max_scale,
                           scale_variation=1.0,
@@ -240,26 +241,36 @@ def generate_im(char_ims, num_bg_images):
     bg = generate_bg(num_bg_images)
 
     plate, plate_mask, code = generate_plate(FONT_HEIGHT, char_ims)
-    
+    plateShape = numpy.shape(plate)[::-1]
+    plateShape = plateShape + (1,)
+    plateShape = numpy.array([[0,0,1], plateShape, [0, plateShape[1], 1], [plateShape[0], 0, 1]])
     M, out_of_bounds = make_affine_transform(
                             from_shape=plate.shape,
                             to_shape=bg.shape,
-                            min_scale=0.6,
-                            max_scale=0.875,
+                            min_scale=0.4,
+                            max_scale=0.8,
                             rotation_variation=0.4,
-                            scale_variation=1.5,
-                            translation_variation=1.2)
+                            scale_variation=1.0,
+                            translation_variation=1.0)
     plate = cv2.warpAffine(plate, M, (bg.shape[1], bg.shape[0]))
     plate_mask = cv2.warpAffine(plate_mask, M, (bg.shape[1], bg.shape[0]))
+    # plate_box = numpy.array(M.dot(plateShape + (1,)))
+    platePolygon = numpy.array((M.dot(plateShape.T)).T)
+    #plate_box.shape = (2,2)
+    platePolygon = platePolygon.astype(int)
+    plate_box = numpy.array([numpy.min(platePolygon,axis=0), numpy.max(platePolygon,axis=0) ])
 
+    # combine plate, and background. Use plate_mask to avoid plate and background corrupting each other
+    # Then resize to target dimensions
     out = plate * plate_mask + bg * (1.0 - plate_mask)
-
+    cv2.rectangle(out, (plate_box[0,0],plate_box[0,1]), (plate_box[1,0],plate_box[1,1]), (0,255,0))
     out = cv2.resize(out, (OUTPUT_SHAPE[1], OUTPUT_SHAPE[0]))
 
+    # add some noise
     out += numpy.random.normal(scale=0.05, size=out.shape)
     out = numpy.clip(out, 0., 1.)
 
-    return out, code, not out_of_bounds
+    return out, code, plate_box, not out_of_bounds
 
 
 def load_fonts(folder_path):
@@ -270,6 +281,28 @@ def load_fonts(folder_path):
                                                               font),
                                                  FONT_HEIGHT))
     return fonts, font_char_ims
+
+
+# create annotation text by replacing keywords within template text
+def create_ann_text(jsonTemplateText, imageFileName,top,left,bottom,right):
+  (x0,y0) = left, top
+  (x1,y1) = right, top
+  (x2,y2) = right, bottom
+  (x3,y3) = left,  bottom
+  width = right - left
+  height = bottom - top
+  annotation = re.sub(r'<x0>', str(x0), jsonTemplateText)
+  annotation = re.sub(r"<x1>", str(x1), annotation)
+  annotation = re.sub(r"<x2>", str(x2), annotation)
+  annotation = re.sub(r"<x3>", str(x3), annotation)
+  annotation = re.sub(r"<y0>", str(y0), annotation)
+  annotation = re.sub(r"<y1>", str(y1), annotation)
+  annotation = re.sub(r"<y2>", str(y2), annotation)
+  annotation = re.sub(r"<y3>", str(y3), annotation)
+  annotation = re.sub(r"<width>", str(width), annotation)
+  annotation = re.sub(r"<height>", str(height), annotation)
+  annotation = re.sub(r"<filename>", imageFileName, annotation)
+  return annotation
 
 
 def generate_ims():
@@ -288,21 +321,34 @@ def generate_ims():
 
 
 if __name__ == "__main__":
-    plateOutputDir = "CA_test"
+    plateOutputDir = "CA_test/images"
+    annOutputDir = "CA_test/ann"
     num_bg_images = len(os.listdir("bgs"))
     os.mkdir(plateOutputDir)
+    os.mkdir(annOutputDir)
     im_gen = itertools.islice(generate_ims(), int(sys.argv[1]))
     numImageWithPlate = 0
     numImageNoPlate = 0
-    for img_idx, (im, c, p) in enumerate(im_gen):
-        fname = "{}/{:08d}_{}_{}.png".format(plateOutputDir, img_idx, c,
-                                               "1" if p else "0")
-        print (fname)
+    jsonTemplateFile = open("plate_annotation_template.json", "r")
+    jsonTemplateText = jsonTemplateFile.read()
+    jsonTemplateFile.close()
+    for img_idx, (im, c, plate_box, p) in enumerate(im_gen):
+        imageFileName = "{:08d}_{}_{}.png".format(img_idx, c, "1" if p else "0")
+        imageFileNameWithPath = "{}/{}".format(plateOutputDir, imageFileName)
+        annFileName = re.sub(r".png", r".json", imageFileName)
+        annFileNameWithPath = "{}/{}".format(annOutputDir, annFileName)
+        print (imageFileName)
+        annotation = create_ann_text(jsonTemplateText, imageFileName, plate_box[0,1], plate_box[0,0], plate_box[1,1], plate_box[1,0] )
+        annFile = open(annFileNameWithPath, "w")
+        annFile.write(annotation)
+        annFile.close()
         if p:
-          cv2.imwrite(fname, im * 255.)
+          cv2.imwrite(imageFileNameWithPath, im * 255.)
           numImageWithPlate += 1
         else:
           bg = generate_bg(num_bg_images)
-          cv2.imwrite(fname, bg * 255.)
+          cv2.imwrite(imageFileNameWithPath, im * 255.)
           numImageNoPlate += 1
     print("Images with plate: {}, images without plate: {}".format(numImageWithPlate, numImageNoPlate))
+
+

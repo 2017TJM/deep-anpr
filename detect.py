@@ -37,7 +37,7 @@ __all__ = (
 
 
 import collections
-import itertools
+import glob
 import math
 import sys
 
@@ -80,6 +80,7 @@ def detect(im, param_vals):
 
     # Convert the image to various scales.
     scaled_ims = list(make_scaled_ims(im, model.WINDOW_SHAPE))
+    print ("Number of scaled images: {}".format(len(scaled_ims)))
 
     # Load the model which detects number plates over a sliding window.
     x, y, params = model.get_detect_model()
@@ -175,40 +176,59 @@ def letter_probs_to_code(letter_probs):
     return "".join(common.CHARS[i] for i in numpy.argmax(letter_probs, axis=1))
 
 
-if __name__ == "__main__":
-    im = cv2.imread(sys.argv[1])
-    im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY) / 255.
+def unzip(b):
+  xs, ys = zip(*b)
+  xs = numpy.array(xs)
+  ys = numpy.array(ys)
+  return xs, ys
 
-    f = numpy.load(sys.argv[2])
+def read_data(img_glob):
+  for fname in sorted(glob.glob(img_glob)):
+    print("Reading: {}".format(fname))
+    im = cv2.imread(fname)
+    filename = fname.split("/")[-1]
+    yield im, filename
+
+
+if __name__ == "__main__":
+    weightFileName = sys.argv[1]
+    print("Loading weights: {}".format(weightFileName))
+    f = numpy.load(weightFileName)
     param_vals = [f[n] for n in sorted(f.files, key=lambda s: int(s[4:]))]
 
-    start_time = time.time()
-    for pt1, pt2, present_prob, letter_probs in post_process(
-                                                  detect(im_gray, param_vals)):
-        pt1 = tuple(reversed(list(map(int, pt1))))
-        pt2 = tuple(reversed(list(map(int, pt2))))
+    ims, filenames = unzip(list(read_data("verify/images/*")))[:2]
+    #junk = read_data("verify/images/*")
+    #junk2, junk3  = junk[:2]
+    for (i, im) in enumerate(ims):
+        start_time = time.time()
+        im_gray = cv2.cvtColor(im, cv2.COLOR_BGR2GRAY) / 255.
+        for pt1, pt2, present_prob, letter_probs in post_process(
+                                                      detect(im_gray, param_vals)):
+            pt1 = tuple(reversed(list(map(int, pt1))))
+            pt2 = tuple(reversed(list(map(int, pt2))))
 
-        code = letter_probs_to_code(letter_probs)
+            code = letter_probs_to_code(letter_probs)
+            print("Found plate: {}".format(code))
 
-        color = (0.0, 255.0, 0.0)
-        cv2.rectangle(im, pt1, pt2, color)
+            color = (0.0, 255.0, 0.0)
+            cv2.rectangle(im, pt1, pt2, color)
 
-        cv2.putText(im,
-                    code,
-                    pt1,
-                    cv2.FONT_HERSHEY_PLAIN, 
-                    1.5,
-                    (0, 0, 0),
-                    thickness=5)
+            cv2.putText(im,
+                        code,
+                        pt1,
+                        cv2.FONT_HERSHEY_PLAIN,
+                        1.5,
+                        (0, 0, 0),
+                        thickness=5)
 
-        cv2.putText(im,
-                    code,
-                    pt1,
-                    cv2.FONT_HERSHEY_PLAIN, 
-                    1.5,
-                    (255, 255, 255),
-                    thickness=2)
+            cv2.putText(im,
+                        code,
+                        pt1,
+                        cv2.FONT_HERSHEY_PLAIN,
+                        1.5,
+                        (255, 255, 255),
+                        thickness=2)
 
-    print("Time for processing single image: {}".format(time.time()- start_time))
-    cv2.imwrite(sys.argv[3], im)
+        print("Time for processing image: {}".format(time.time()- start_time))
+        cv2.imwrite("verify/ann/{}".format(filenames[i]), im)
 
