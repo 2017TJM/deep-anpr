@@ -247,7 +247,7 @@ def generate_im(char_ims, num_bg_images):
     M, out_of_bounds = make_affine_transform(
                             from_shape=plate.shape,
                             to_shape=bg.shape,
-                            min_scale=0.4,
+                            min_scale=0.3,
                             max_scale=0.8,
                             rotation_variation=0.4,
                             scale_variation=1.0,
@@ -263,7 +263,7 @@ def generate_im(char_ims, num_bg_images):
     # combine plate, and background. Use plate_mask to avoid plate and background corrupting each other
     # Then resize to target dimensions
     out = plate * plate_mask + bg * (1.0 - plate_mask)
-    cv2.rectangle(out, (plate_box[0,0],plate_box[0,1]), (plate_box[1,0],plate_box[1,1]), (0,255,0))
+    # cv2.rectangle(out, (plate_box[0,0],plate_box[0,1]), (plate_box[1,0],plate_box[1,1]), (0,255,0))
     out = cv2.resize(out, (OUTPUT_SHAPE[1], OUTPUT_SHAPE[0]))
 
     # add some noise
@@ -321,11 +321,13 @@ def generate_ims():
 
 
 if __name__ == "__main__":
-    plateOutputDir = "CA_test/images"
-    annOutputDir = "CA_test/ann"
+    plateOutputDir = "CA_artificial/img"
+    annOutputDir = "CA_artificial/ann"
+    bgOutputDir = "CA_artificial/bg"
     num_bg_images = len(os.listdir("bgs"))
     os.mkdir(plateOutputDir)
     os.mkdir(annOutputDir)
+    os.mkdir(bgOutputDir)
     im_gen = itertools.islice(generate_ims(), int(sys.argv[1]))
     numImageWithPlate = 0
     numImageNoPlate = 0
@@ -342,13 +344,17 @@ if __name__ == "__main__":
         annFile = open(annFileNameWithPath, "w")
         annFile.write(annotation)
         annFile.close()
+        cv2.imwrite(imageFileNameWithPath, im * 255.)
         if p:
-          cv2.imwrite(imageFileNameWithPath, im * 255.)
           numImageWithPlate += 1
         else:
-          bg = generate_bg(num_bg_images)
-          cv2.imwrite(imageFileNameWithPath, im * 255.)
           numImageNoPlate += 1
     print("Images with plate: {}, images without plate: {}".format(numImageWithPlate, numImageNoPlate))
+    for i in numpy.arange(int(sys.argv[1])):
+      bg = generate_bg(num_bg_images)
+      bgFileName = "{}/bg_{:08d}.png".format(bgOutputDir,i)
+      cv2.imwrite(bgFileName, bg * 255.)
+    print("Created {} background images...".format(int(sys.argv[1])))
+
 
 
