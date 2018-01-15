@@ -45,7 +45,7 @@ import numpy
 import tensorflow as tf
 
 import common
-import gen
+import gen_simple
 import model
 
 
@@ -113,7 +113,7 @@ def mpgen(f):
 
 @mpgen
 def read_batches(batch_size):
-    g = gen.generate_ims()
+    g = gen_simple.generate_ims()
     def gen_vecs():
         for im, c, p in itertools.islice(g, batch_size):
             yield im, code_to_vec(p, c)
@@ -172,7 +172,8 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
     y_ = tf.placeholder(tf.float32, [None, 7 * len(common.CHARS) + 1])
 
     digits_loss, presence_loss, loss = get_loss(y, y_)
-    train_step = tf.train.AdamOptimizer(learn_rate).minimize(loss)
+    #train_step = tf.train.AdamOptimizer(learn_rate).minimize(loss)
+    train_step = tf.train.AdamOptimizer(learn_rate).minimize(digits_loss)
 
     best = tf.argmax(tf.reshape(y[:, 1:], [-1, 7, len(common.CHARS)]), 2)
     correct = tf.argmax(tf.reshape(y_[:, 1:], [-1, 7, len(common.CHARS)]), 2)
@@ -181,7 +182,8 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
         assert len(params) == len(initial_weights)
         assign_ops = [w.assign(v) for w, v in zip(params, initial_weights)]
 
-    init = tf.initialize_all_variables()
+    #init = tf.initialize_all_variables() # deprecated
+    init = tf.global_variables_initializer()
 
     def vec_to_plate(v):
         return "".join(common.CHARS[i] for i in v)
@@ -228,7 +230,7 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
         if initial_weights is not None:
             sess.run(assign_ops)
 
-        test_xs, test_ys = unzip(list(read_data("CA_test/*.png"))[:50])
+        test_xs, test_ys = unzip(list(read_data("CA_plate_only_test/*.png"))[:50])
 
         try:
             last_batch_idx = 0
@@ -247,7 +249,7 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
 
         except KeyboardInterrupt:
             last_weights = [p.eval() for p in params]
-            numpy.savez("CA_weights.npz", *last_weights)
+            numpy.savez("CA_weights3.npz", *last_weights)
             return last_weights
 
 
