@@ -126,10 +126,10 @@ def get_loss(y, y_):
     # Calculate the loss from digits being incorrect.  Don't count loss from
     # digits that are in non-present plates.
     digits_loss = tf.nn.softmax_cross_entropy_with_logits(
-                                          logits=(tf.reshape(y[:, 1:],
-                                                     [-1, len(common.CHARS)])),
-                                          labels=(tf.reshape(y_[:, 1:],
-                                                     [-1, len(common.CHARS)])))
+                                          logits=tf.reshape(y[:, 1:],
+                                                     [-1, len(common.CHARS)]),
+                                          labels=tf.reshape(y_[:, 1:],
+                                                     [-1, len(common.CHARS)]))
     digits_loss = tf.reshape(digits_loss, [-1, 7])
     digits_loss = tf.reduce_sum(digits_loss, 1)
     digits_loss *= (y_[:, 0] != 0)
@@ -137,7 +137,7 @@ def get_loss(y, y_):
 
     # Calculate the loss from presence indicator being wrong.
     presence_loss = tf.nn.sigmoid_cross_entropy_with_logits(
-                                                          logits=(y[:, :1]), labels=(y_[:, :1]))
+                                                          logits=y[:, :1], labels=y_[:, :1])
     presence_loss = 7 * tf.reduce_sum(presence_loss)
 
     return digits_loss, presence_loss, digits_loss + presence_loss
@@ -172,8 +172,7 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
     y_ = tf.placeholder(tf.float32, [None, 7 * len(common.CHARS) + 1])
 
     digits_loss, presence_loss, loss = get_loss(y, y_)
-    #train_step = tf.train.AdamOptimizer(learn_rate).minimize(loss)
-    train_step = tf.train.AdamOptimizer(learn_rate).minimize(digits_loss)
+    train_step = tf.train.AdamOptimizer(learn_rate).minimize(loss)
 
     best = tf.argmax(tf.reshape(y[:, 1:], [-1, 7, len(common.CHARS)]), 2)
     correct = tf.argmax(tf.reshape(y_[:, 1:], [-1, 7, len(common.CHARS)]), 2)
@@ -230,7 +229,7 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
         if initial_weights is not None:
             sess.run(assign_ops)
 
-        test_xs, test_ys = unzip(list(read_data("CA_plate_only_test/*.png"))[:50])
+        test_xs, test_ys = unzip(list(read_data("pickering_test/*.png"))[:50])
 
         try:
             last_batch_idx = 0
@@ -249,7 +248,7 @@ def train(learn_rate, report_steps, batch_size, initial_weights=None):
 
         except KeyboardInterrupt:
             last_weights = [p.eval() for p in params]
-            numpy.savez("CA_weights3.npz", *last_weights)
+            numpy.savez("weights.npz", *last_weights)
             return last_weights
 
 

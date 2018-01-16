@@ -148,7 +148,8 @@ def make_affine_transform(from_shape, to_shape,
 
     # Set the translation such that the skewed and scaled image falls within
     # the output shape's bounds.
-    trans = (numpy.random.random((2,1)) - 0.5) * translation_variation
+    weightAxes = numpy.array([[1.0],[10.0]])
+    trans = (numpy.random.random((2,1)) - 0.5) * weightAxes * translation_variation
     trans = ((2.0 * trans) ** 5.0) / 2.0
     if numpy.any(trans < -0.5) or numpy.any(trans > 0.5):
         out_of_bounds = True
@@ -191,7 +192,7 @@ def rounded_rect(shape, radius):
 
 
 def generate_plate(font_height, char_ims):
-    h_padding = random.uniform(0.25, 0.35) * font_height
+    h_padding = random.uniform(0.05, 0.11) * font_height
     v_padBot = random.uniform(0.15, 0.25) * font_height
     #v_padTop = random.uniform(0.6, 0.7) * font_height
     v_padTop = random.uniform(0.15, 0.25) * font_height
@@ -259,9 +260,9 @@ def generate_im(char_ims, num_bg_images):
                             to_shape=bg.shape,
                             min_scale=0.975,
                             max_scale=1.0,
-                            rotation_variation=1.0,
+                            rotation_variation=0.5,
                             scale_variation=1.0,
-                            translation_variation=0.0)
+                            translation_variation=0.1)
     plate = cv2.warpAffine(plate, M, (bg.shape[1], bg.shape[0]))
     plate_mask = cv2.warpAffine(plate_mask, M, (bg.shape[1], bg.shape[0]))
 
@@ -303,10 +304,10 @@ def generate_ims():
 
 
 if __name__ == "__main__":
-    os.mkdir("CA_plate_only_test")
+    os.mkdir("test")
     im_gen = itertools.islice(generate_ims(), int(sys.argv[1]))
     for img_idx, (im, c, p) in enumerate(im_gen):
-        fname = "CA_plate_only_test/{:08d}_{}_{}.png".format(img_idx, c,
+        fname = "test/{:08d}_{}_{}.png".format(img_idx, c,
                                                "1" if p else "0")
         print (fname)
         cv2.imwrite(fname, im * 255.)
